@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard | AlturaWing</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">Altura<span>Wing</span></a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/quiz">Take Quiz</a></li>
+          <li><a href="/admin" class="active">Admin</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="admin-container">
+
+    <!-- Login -->
+    <div id="loginSection" class="card login-card fade-in">
+      <h2>Admin Login</h2>
+      <p>Enter the admin password to access the dashboard.</p>
+      <input type="password" id="adminPassword" placeholder="Enter admin password" autofocus>
+      <p id="loginError" class="error-msg hidden"></p>
+      <button class="btn btn-primary" onclick="adminLogin()">Login</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboardSection" class="hidden">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <h2 style="color:var(--primary);font-size:1.8rem;">Admin Dashboard</h2>
+        <div>
+          <button class="btn btn-outline" onclick="refreshData()" style="margin-right:8px;">↻ Refresh</button>
+          <button class="btn btn-success" onclick="downloadCSV()" style="margin-right:8px;">⬇ Download CSV</button>
+          <button class="btn btn-danger" onclick="adminLogout()" style="padding:10px 20px;font-size:0.9rem;">Logout</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Total Responses</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statAvg">0</div>
+          <div class="stat-label">Average Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statHigh">0</div>
+          <div class="stat-label">Highest Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statLow">0</div>
+          <div class="stat-label">Lowest Score</div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px;" id="chartsSection">
+        <div class="card">
+          <h3 style="color:var(--primary);margin-bottom:16px;font-size:1.1rem;">Score Distribution</h3>
+          <canvas id="scoreDistChart" height="220"></canvas>
+        </div>
+        <div class="card">
+          <h3 style="color:var(--primary);margin-bottom:16px;font-size:1.1rem;">Question-wise Accuracy</h3>
+          <canvas id="questionAccChart" height="220"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchTab('responses', this)">All Responses</button>
+        <button class="admin-tab" onclick="switchTab('questions', this)">Question Stats</button>
+        <button class="admin-tab" onclick="switchTab('detail', this)">Response Detail</button>
+      </div>
+
+      <!-- Tab: All Responses -->
+      <div class="tab-content active" id="tab-responses">
+        <div id="responsesTableWrapper">
+          <p class="text-center" style="color:var(--text-light);padding:40px 0;" id="noResponses">No responses yet.</p>
+          <table class="data-table hidden" id="responsesTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Score</th>
+                <th>Percentage</th>
+                <th>Submitted At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="responsesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Question Stats -->
+      <div class="tab-content" id="tab-questions">
+        <table class="data-table" id="questionStatsTable">
+          <thead>
+            <tr>
+              <th>Q#</th>
+              <th>Question</th>
+              <th>Correct</th>
+              <th>Accuracy</th>
+            </tr>
+          </thead>
+          <tbody id="questionStatsBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Tab: Response Detail -->
+      <div class="tab-content" id="tab-detail">
+        <div id="detailPlaceholder" class="text-center" style="color:var(--text-light);padding:40px 0;">
+          Click "View" on a response to see detailed answers here.
+        </div>
+        <div id="detailContent" class="hidden"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <p>© 2026 AlturaWing (<a href="https://alturawing.tech" style="color:rgba(255,255,255,0.85)">alturawing.tech</a>). Educational project.<br>Third-party images and videos are used under their respective licenses or via official embeds for learning purposes only.<br>AlturaWing is not affiliated with or endorsed by any individuals, organizations, or brands referenced.</p>
+  </footer>
+
+  <script>
+    let adminToken = '';
+    const letters = ['A', 'B', 'C', 'D'];
+
+    // Login
+    document.getElementById('adminPassword').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') adminLogin();
+    });
+
+    async function adminLogin() {
+      const password = document.getElementById('adminPassword').value;
+      const errorEl = document.getElementById('loginError');
+
+      if (!password) {
+        errorEl.textContent = 'Please enter the password.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          adminToken = data.token;
+          sessionStorage.setItem('adminToken', adminToken);
+          document.getElementById('loginSection').classList.add('hidden');
+          document.getElementById('dashboardSection').classList.remove('hidden');
+          loadDashboard();
+        } else {
+          errorEl.textContent = data.error || 'Invalid password.';
+          errorEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    function adminLogout() {
+      adminToken = '';
+      sessionStorage.removeItem('adminToken');
+      document.getElementById('dashboardSection').classList.add('hidden');
+      document.getElementById('loginSection').classList.remove('hidden');
+      document.getElementById('adminPassword').value = '';
+    }
+
+    // Check session on load
+    (function checkSession() {
+      const saved = sessionStorage.getItem('adminToken');
+      if (saved) {
+        adminToken = saved;
+        document.getElementById('loginSection').classList.add('hidden');
+        document.getElementById('dashboardSection').classList.remove('hidden');
+        loadDashboard();
+      }
+    })();
+
+    async function loadDashboard() {
+      try {
+        const res = await fetch('/api/admin/responses', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+
+        if (res.status === 401) {
+          adminLogout();
+          return;
+        }
+
+        const data = await res.json();
+        renderDashboard(data);
+      } catch (err) {
+        console.error('Failed to load dashboard:', err);
+      }
+    }
+
+    function refreshData() {
+      loadDashboard();
+    }
+
+    function renderDashboard(data) {
+      const { stats, questionStats, responses } = data;
+
+      // Cache for CSV download
+      cachedResponses = responses;
+
+      // Stats cards
+      document.getElementById('statTotal').textContent = stats.totalResponses;
+      document.getElementById('statAvg').textContent = `${stats.avgScore}/${stats.totalQuestions}`;
+      document.getElementById('statHigh').textContent = `${stats.highestScore}/${stats.totalQuestions}`;
+      document.getElementById('statLow').textContent = stats.totalResponses > 0 ? `${stats.lowestScore}/${stats.totalQuestions}` : '—';
+
+      // ── Charts ──
+      renderCharts(responses, questionStats);
+
+      // Responses table
+      if (responses.length === 0) {
+        document.getElementById('noResponses').classList.remove('hidden');
+        document.getElementById('responsesTable').classList.add('hidden');
+      } else {
+        document.getElementById('noResponses').classList.add('hidden');
+        document.getElementById('responsesTable').classList.remove('hidden');
+
+        const tbody = document.getElementById('responsesBody');
+        tbody.innerHTML = '';
+        responses.forEach((r, idx) => {
+          const date = new Date(r.submittedAt);
+          const fillClass = r.percentage >= 70 ? 'fill-high' : r.percentage >= 40 ? 'fill-mid' : 'fill-low';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(r.userName)}</strong></td>
+            <td>${r.score}/${r.total}</td>
+            <td>
+              <span class="percentage-bar"><span class="fill ${fillClass}" style="width:${r.percentage}%"></span></span>
+              ${r.percentage}%
+            </td>
+            <td>${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+            <td><button class="btn btn-secondary" style="padding:6px 14px;font-size:0.85rem;" onclick="viewDetail('${r.id}')">View</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Question stats
+      const qBody = document.getElementById('questionStatsBody');
+      qBody.innerHTML = '';
+      questionStats.forEach((q) => {
+        const fillClass = q.accuracy >= 70 ? 'fill-high' : q.accuracy >= 40 ? 'fill-mid' : 'fill-low';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${q.id}</td>
+          <td>${escapeHtml(q.question)}</td>
+          <td>${q.correctCount}/${q.totalAttempts}</td>
+          <td>
+            <span class="percentage-bar"><span class="fill ${fillClass}" style="width:${q.accuracy}%"></span></span>
+            ${q.accuracy}%
+          </td>
+        `;
+        qBody.appendChild(tr);
+      });
+    }
+
+    async function viewDetail(id) {
+      switchTab('detail', document.querySelectorAll('.admin-tab')[2]);
+
+      const placeholder = document.getElementById('detailPlaceholder');
+      const content = document.getElementById('detailContent');
+      placeholder.textContent = 'Loading...';
+      placeholder.classList.remove('hidden');
+      content.classList.add('hidden');
+
+      try {
+        const res = await fetch(`/api/admin/responses/${id}`, {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+
+        if (!res.ok) {
+          placeholder.textContent = 'Failed to load response details.';
+          return;
+        }
+
+        const data = await res.json();
+        placeholder.classList.add('hidden');
+        content.classList.remove('hidden');
+
+        const date = new Date(data.submittedAt);
+        let html = `
+          <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff;text-align:center;padding:32px;">
+            <h3 style="margin-bottom:8px;">${escapeHtml(data.userName)}</h3>
+            <p style="font-size:2rem;font-weight:800;">${data.score}/${data.total} (${data.percentage}%)</p>
+            <p style="opacity:0.7;font-size:0.9rem;margin-top:8px;">Submitted: ${date.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+          </div>
+        `;
+
+        data.results.forEach((r, idx) => {
+          const userText = r.userAnswer !== null ? `${letters[r.userAnswer]}. ${r.options[r.userAnswer]}` : 'Not answered';
+          const correctText = `${letters[r.correctAnswer]}. ${r.options[r.correctAnswer]}`;
+          html += `
+            <div class="card answer-item ${r.isCorrect ? 'correct' : 'wrong'}">
+              <div class="q-number">Question ${idx + 1}</div>
+              <h4>${escapeHtml(r.question)}</h4>
+              <span class="answer-badge ${r.isCorrect ? 'badge-correct' : 'badge-wrong'}">
+                ${r.isCorrect ? '✓ Correct' : '✗ Incorrect'}
+              </span>
+              <div class="answer-detail">
+                <div class="${r.isCorrect ? 'correct-answer' : 'your-answer'}">User's answer: <strong>${escapeHtml(userText)}</strong></div>
+                ${!r.isCorrect ? `<div class="correct-answer">Correct answer: <strong>${escapeHtml(correctText)}</strong></div>` : ''}
+              </div>
+            </div>
+          `;
+        });
+
+        content.innerHTML = html;
+      } catch (err) {
+        placeholder.textContent = 'Network error. Please try again.';
+      }
+    }
+
+    function switchTab(tabName, btnEl) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+
+      // Show selected
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      btnEl.classList.add('active');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ── Charts ──
+    let scoreDistChartInstance = null;
+    let questionAccChartInstance = null;
+
+    function renderCharts(responses, questionStats) {
+      // Score Distribution Histogram
+      const buckets = Array(11).fill(0);
+      responses.forEach(r => { buckets[r.score]++; });
+
+      if (scoreDistChartInstance) scoreDistChartInstance.destroy();
+      scoreDistChartInstance = new Chart(document.getElementById('scoreDistChart'), {
+        type: 'bar',
+        data: {
+          labels: buckets.map((_, i) => `${i}/10`),
+          datasets: [{
+            label: 'Students',
+            data: buckets,
+            backgroundColor: buckets.map((_, i) => i >= 7 ? '#2e7d32' : i >= 4 ? '#ff6f00' : '#c62828'),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Students' } },
+            x: { title: { display: true, text: 'Score' }, grid: { display: false } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      // Question Accuracy Bar Chart
+      if (questionAccChartInstance) questionAccChartInstance.destroy();
+      questionAccChartInstance = new Chart(document.getElementById('questionAccChart'), {
+        type: 'bar',
+        data: {
+          labels: questionStats.map(q => `Q${q.id}`),
+          datasets: [{
+            label: 'Accuracy %',
+            data: questionStats.map(q => q.accuracy),
+            backgroundColor: questionStats.map(q => q.accuracy >= 70 ? '#2e7d32' : q.accuracy >= 40 ? '#ff6f00' : '#c62828'),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, title: { display: true, text: 'Accuracy' } },
+            x: { title: { display: true, text: 'Question' }, grid: { display: false } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `${ctx.parsed.y}% correct`,
+                afterLabel: ctx => questionStats[ctx.dataIndex].question.substring(0, 60) + '...'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ── CSV Download ──
+    let cachedResponses = [];
+
+    const origRenderDashboard = renderDashboard;
+    // Patch to cache responses
+    (function() {
+      const origFn = renderDashboard;
+    })();
+
+    function downloadCSV() {
+      if (!cachedResponses || cachedResponses.length === 0) {
+        alert('No responses to download.');
+        return;
+      }
+
+      const headers = ['#', 'Name', 'Score', 'Total', 'Percentage', 'Submitted At'];
+      const rows = cachedResponses.map((r, idx) => {
+        const date = new Date(r.submittedAt);
+        return [
+          idx + 1,
+          `"${r.userName.replace(/"/g, '""')}"`,
+          r.score,
+          r.total,
+          r.percentage + '%',
+          `"${date.toLocaleString('en-IN')}"`
+        ].join(',');
+      });
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `alturawing-quiz-results-${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+
+</body>
+</html>

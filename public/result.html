@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Result | AlturaWing</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">Altura<span>Wing</span></a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/quiz">Take Quiz</a></li>
+          <li><a href="/admin">Admin</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="result-container">
+
+    <!-- Loading -->
+    <div id="loadingSection" class="text-center" style="padding:80px 0;">
+      <div class="loading-spinner" style="width:48px;height:48px;border-width:5px;margin:0 auto 20px;border-color:rgba(26,35,126,0.2);border-top-color:var(--primary);"></div>
+      <p style="font-size:1.1rem;color:var(--text-light);">Loading your results...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="errorSection" class="hidden text-center" style="padding:80px 0;">
+      <h2 style="color:var(--danger);margin-bottom:12px;">Result Not Found</h2>
+      <p style="color:var(--text-light);margin-bottom:24px;" id="errorMsg">The result you're looking for doesn't exist or the link is invalid.</p>
+      <a href="/quiz" class="btn btn-primary">Take the Quiz</a>
+    </div>
+
+    <!-- Results -->
+    <div id="resultSection" class="hidden">
+      <!-- Score Card -->
+      <div class="score-card fade-in">
+        <div class="score-circle">
+          <div class="score-number" id="scoreNumber">0</div>
+          <div class="score-label" id="scoreLabel">out of 10</div>
+        </div>
+        <h2 id="resultGreeting">Great job!</h2>
+        <p class="score-msg" id="scoreMsg">You scored 80%</p>
+        <p style="margin-top:12px;opacity:0.7;font-size:0.9rem;" id="submittedAt"></p>
+      </div>
+
+      <!-- Score Breakdown Chart -->
+      <div class="card mt-3 fade-in">
+        <h3 style="color:var(--primary);margin-bottom:16px;">Performance Breakdown</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;">
+          <div style="position:relative;max-width:250px;margin:0 auto;">
+            <canvas id="scoreDonut"></canvas>
+          </div>
+          <div>
+            <canvas id="categoryBar" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Answer Review -->
+      <h2 class="section-title" style="font-size:1.5rem;margin-top:40px;">Answer Review</h2>
+      <div class="answer-review" id="answerReview"></div>
+
+      <!-- Actions -->
+      <div class="text-center mt-4 mb-4">
+        <a href="/" class="btn btn-outline" style="margin-right:12px;">← Back to Home</a>
+        <a href="/quiz" class="btn btn-primary">Retake Quiz</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <p>© 2026 AlturaWing (<a href="https://alturawing.tech" style="color:rgba(255,255,255,0.85)">alturawing.tech</a>). Educational project.<br>Third-party images and videos are used under their respective licenses or via official embeds for learning purposes only.<br>AlturaWing is not affiliated with or endorsed by any individuals, organizations, or brands referenced.</p>
+  </footer>
+
+  <script>
+    const letters = ['A', 'B', 'C', 'D'];
+
+    async function loadResult() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+
+      if (!id) {
+        showError('No result ID provided. Please take the quiz first.');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/result/${id}`);
+        if (!res.ok) {
+          showError('Result not found. The link may be invalid or expired.');
+          return;
+        }
+        const data = await res.json();
+        renderResult(data);
+      } catch (err) {
+        showError('Failed to load results. Please check your connection.');
+      }
+    }
+
+    function showError(msg) {
+      document.getElementById('loadingSection').classList.add('hidden');
+      document.getElementById('errorSection').classList.remove('hidden');
+      document.getElementById('errorMsg').textContent = msg;
+    }
+
+    function renderResult(data) {
+      document.getElementById('loadingSection').classList.add('hidden');
+      document.getElementById('resultSection').classList.remove('hidden');
+
+      // Score
+      document.getElementById('scoreNumber').textContent = data.score;
+      document.getElementById('scoreLabel').textContent = `out of ${data.total}`;
+      document.getElementById('scoreMsg').textContent = `${data.userName}, you scored ${data.percentage}%`;
+
+      // Greeting message
+      const greetEl = document.getElementById('resultGreeting');
+      if (data.percentage >= 90) {
+        greetEl.textContent = '🏆 Outstanding!';
+      } else if (data.percentage >= 70) {
+        greetEl.textContent = '🎉 Great Job!';
+      } else if (data.percentage >= 50) {
+        greetEl.textContent = '👍 Good Effort!';
+      } else {
+        greetEl.textContent = '📚 Keep Learning!';
+      }
+
+      // Submitted at
+      if (data.submittedAt) {
+        const date = new Date(data.submittedAt);
+        document.getElementById('submittedAt').textContent = `Submitted on ${date.toLocaleDateString('en-IN', {
+          year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        })}`;
+      }
+
+      // ── Charts ──
+      const correctCount = data.score;
+      const wrongCount = data.total - data.score;
+
+      // Donut chart: Correct vs Wrong
+      new Chart(document.getElementById('scoreDonut'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Correct', 'Incorrect'],
+          datasets: [{
+            data: [correctCount, wrongCount],
+            backgroundColor: ['#2e7d32', '#c62828'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '65%',
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, font: { size: 13 } } }
+          }
+        }
+      });
+
+      // Category breakdown: Case Study vs General
+      const caseStudyResults = data.results.slice(0, 4);
+      const generalResults = data.results.slice(4);
+      const csCorrect = caseStudyResults.filter(r => r.isCorrect).length;
+      const genCorrect = generalResults.filter(r => r.isCorrect).length;
+
+      new Chart(document.getElementById('categoryBar'), {
+        type: 'bar',
+        data: {
+          labels: ['Case Study (4)', 'General Knowledge (6)'],
+          datasets: [
+            { label: 'Correct', data: [csCorrect, genCorrect], backgroundColor: '#2e7d32', borderRadius: 6 },
+            { label: 'Incorrect', data: [4 - csCorrect, 6 - genCorrect], backgroundColor: '#c62828', borderRadius: 6 }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, max: 6, title: { display: true, text: 'Questions' } },
+            x: { grid: { display: false } }
+          },
+          plugins: { legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } } }
+        }
+      });
+
+      // Answer review
+      const reviewEl = document.getElementById('answerReview');
+      reviewEl.innerHTML = '';
+
+      data.results.forEach((r, idx) => {
+        const isCorrect = r.isCorrect;
+        const div = document.createElement('div');
+        div.className = `card answer-item ${isCorrect ? 'correct' : 'wrong'}`;
+
+        const userAnswerText = r.userAnswer !== null ? r.options[r.userAnswer] : 'Not answered';
+        const correctAnswerText = r.options[r.correctAnswer];
+
+        div.innerHTML = `
+          <div class="q-number">Question ${idx + 1}</div>
+          <h4>${r.question}</h4>
+          <span class="answer-badge ${isCorrect ? 'badge-correct' : 'badge-wrong'}">
+            ${isCorrect ? '✓ Correct' : '✗ Incorrect'}
+          </span>
+          <div class="answer-detail">
+            ${!isCorrect ? `<div class="your-answer">Your answer: <strong>${letters[r.userAnswer] || '—'}. ${userAnswerText}</strong></div>` : ''}
+            <div class="correct-answer">Correct answer: <strong>${letters[r.correctAnswer]}. ${correctAnswerText}</strong></div>
+          </div>
+        `;
+        reviewEl.appendChild(div);
+      });
+    }
+
+    loadResult();
+  </script>
+
+</body>
+</html>

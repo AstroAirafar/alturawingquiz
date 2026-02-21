@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz — Ratan Tata | AlturaWing</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container">
+      <a href="/" class="logo">Altura<span>Wing</span></a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/quiz" class="active">Take Quiz</a></li>
+          <li><a href="/admin">Admin</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="quiz-container">
+
+    <!-- Step 1: Name Entry -->
+    <div id="nameSection" class="card name-form fade-in">
+      <h2>Welcome to the Ratan Tata Quiz</h2>
+      <p>Test your knowledge with 10 questions — including a case study on the Tata Nano.</p>
+      <div class="input-group">
+        <input type="text" id="userName" placeholder="Enter your full name" maxlength="50" autofocus>
+        <button class="btn btn-primary" id="startBtn" onclick="startQuiz()">Start Quiz</button>
+      </div>
+      <p id="nameError" class="error-msg hidden"></p>
+    </div>
+
+    <!-- Step 2: Quiz -->
+    <div id="quizSection" class="hidden">
+      <div class="progress-bar">
+        <div class="fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      <p class="question-counter" id="questionCounter">Question 1 of 10</p>
+
+      <!-- Case study (shown for questions 1-4) -->
+      <div id="caseStudySection" class="case-study-box hidden">
+        <h3 id="caseStudyTitle"></h3>
+        <p id="caseStudyContent"></p>
+      </div>
+
+      <!-- Question card -->
+      <div class="card question-card fade-in" id="questionCard">
+        <div id="sectionLabel" class="mb-2" style="font-size:0.85rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;"></div>
+        <h3 id="questionText"></h3>
+        <div class="options-list" id="optionsList"></div>
+      </div>
+
+      <div class="quiz-nav">
+        <button class="btn btn-outline" id="prevBtn" onclick="prevQuestion()" disabled>← Previous</button>
+        <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Submitting -->
+    <div id="submittingSection" class="hidden text-center" style="padding:80px 0;">
+      <div class="loading-spinner" style="width:48px;height:48px;border-width:5px;margin:0 auto 20px;border-color:rgba(26,35,126,0.2);border-top-color:var(--primary);"></div>
+      <p style="font-size:1.1rem;color:var(--text-light);">Submitting your answers...</p>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <p>© 2026 AlturaWing (<a href="https://alturawing.tech" style="color:rgba(255,255,255,0.85)">alturawing.tech</a>).<br>Educational project.<br>Third-party images and videos are used under their respective licenses or via official embeds for learning purposes only.<br>AlturaWing is not affiliated with or endorsed by any individuals, organizations, or brands referenced.</p>
+  </footer>
+
+  <script>
+    let quizData = null;
+    let allQuestions = [];
+    let currentQuestion = 0;
+    let userAnswers = {};
+    let userName = '';
+
+    // Load quiz data on page load
+    async function loadQuiz() {
+      try {
+        const res = await fetch('/api/quiz');
+        quizData = await res.json();
+        allQuestions = [...quizData.caseStudyQuestions, ...quizData.generalQuestions];
+      } catch (err) {
+        console.error('Failed to load quiz:', err);
+      }
+    }
+    loadQuiz();
+
+    function startQuiz() {
+      const nameInput = document.getElementById('userName');
+      const name = nameInput.value.trim();
+      const errorEl = document.getElementById('nameError');
+
+      if (name.length < 2) {
+        errorEl.textContent = 'Please enter your full name (at least 2 characters).';
+        errorEl.classList.remove('hidden');
+        nameInput.focus();
+        return;
+      }
+      if (name.length > 50) {
+        errorEl.textContent = 'Name must be 50 characters or less.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      userName = name;
+      errorEl.classList.add('hidden');
+      document.getElementById('nameSection').classList.add('hidden');
+      document.getElementById('quizSection').classList.remove('hidden');
+      renderQuestion();
+    }
+
+    // Enter key starts quiz
+    document.getElementById('userName').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') startQuiz();
+    });
+
+    function renderQuestion() {
+      const q = allQuestions[currentQuestion];
+      const total = allQuestions.length;
+
+      // Update progress
+      document.getElementById('progressFill').style.width = `${((currentQuestion + 1) / total) * 100}%`;
+      document.getElementById('questionCounter').textContent = `Question ${currentQuestion + 1} of ${total}`;
+
+      // Show/hide case study
+      const csSection = document.getElementById('caseStudySection');
+      if (currentQuestion < quizData.caseStudyQuestions.length) {
+        csSection.classList.remove('hidden');
+        document.getElementById('caseStudyTitle').textContent = quizData.caseStudy.title;
+        document.getElementById('caseStudyContent').textContent = quizData.caseStudy.content;
+        document.getElementById('sectionLabel').textContent = '📋 Case Study Question';
+      } else {
+        csSection.classList.add('hidden');
+        document.getElementById('sectionLabel').textContent = '🧠 General Knowledge';
+      }
+
+      // Render question
+      document.getElementById('questionText').textContent = q.question;
+
+      const optionsList = document.getElementById('optionsList');
+      optionsList.innerHTML = '';
+      const letters = ['A', 'B', 'C', 'D'];
+      q.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn' + (userAnswers[q.id] === idx ? ' selected' : '');
+        btn.innerHTML = `<span class="option-letter">${letters[idx]}</span><span>${opt}</span>`;
+        btn.onclick = () => selectOption(q.id, idx);
+        optionsList.appendChild(btn);
+      });
+
+      // Nav buttons
+      document.getElementById('prevBtn').disabled = currentQuestion === 0;
+      const nextBtn = document.getElementById('nextBtn');
+      if (currentQuestion === total - 1) {
+        nextBtn.textContent = 'Submit Quiz ✓';
+        nextBtn.className = 'btn btn-success';
+      } else {
+        nextBtn.textContent = 'Next →';
+        nextBtn.className = 'btn btn-primary';
+      }
+
+      // Animate
+      const card = document.getElementById('questionCard');
+      card.classList.remove('fade-in');
+      void card.offsetWidth; // trigger reflow
+      card.classList.add('fade-in');
+    }
+
+    function selectOption(questionId, optionIdx) {
+      userAnswers[questionId] = optionIdx;
+      // Re-render to show selection
+      const buttons = document.querySelectorAll('.option-btn');
+      buttons.forEach((btn, idx) => {
+        btn.classList.toggle('selected', idx === optionIdx);
+        btn.querySelector('.option-letter').className = 'option-letter';
+      });
+    }
+
+    function nextQuestion() {
+      const q = allQuestions[currentQuestion];
+      if (userAnswers[q.id] === undefined) {
+        alert('Please select an answer before proceeding.');
+        return;
+      }
+
+      if (currentQuestion === allQuestions.length - 1) {
+        submitQuiz();
+      } else {
+        currentQuestion++;
+        renderQuestion();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    function prevQuestion() {
+      if (currentQuestion > 0) {
+        currentQuestion--;
+        renderQuestion();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    async function submitQuiz() {
+      document.getElementById('quizSection').classList.add('hidden');
+      document.getElementById('submittingSection').classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userName, answers: userAnswers })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          // Redirect to result page
+          window.location.href = `/result?id=${data.id}`;
+        } else {
+          alert(data.error || 'Submission failed. Please try again.');
+          document.getElementById('submittingSection').classList.add('hidden');
+          document.getElementById('quizSection').classList.remove('hidden');
+        }
+      } catch (err) {
+        alert('Network error. Please check your connection and try again.');
+        document.getElementById('submittingSection').classList.add('hidden');
+        document.getElementById('quizSection').classList.remove('hidden');
+      }
+    }
+  </script>
+
+</body>
+</html>
