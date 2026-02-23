@@ -5,17 +5,16 @@
 ![Node.js](https://img.shields.io/badge/Node.js-18.x-green)
 ![Express](https://img.shields.io/badge/Express.js-Backend-lightgrey)
 ![SQLite](https://img.shields.io/badge/Database-SQLite-blue)
-![Deployed](https://img.shields.io/badge/Status-Live-success)
+![Deployment](https://img.shields.io/badge/Status-Not_Active-lightgrey)
 ![License](https://img.shields.io/badge/License-Educational-orange)
 
 ---
 
-## 🌐 Live Application
+## 🌐 Deployment Status
 
-**Production URL:**
-👉 [https://alturawing.tech](https://alturawing.tech)
+The application was previously deployed on DigitalOcean with Nginx reverse proxy and HTTPS.
 
-Deployed on DigitalOcean with Nginx reverse proxy and HTTPS (Let’s Encrypt).
+The production environment has been intentionally decommissioned for cost optimization. The project remains fully deployable using the documented deployment workflow.
 
 ---
 
